@@ -32,12 +32,23 @@ public class car_control : MonoBehaviour
 
     //Déclaration du texte de l'UI
     public Text TxtSpeed;
+    public Text Txtgear;
 
     //Déclaration du bool pour les phares avant
     private bool phare;
 
-    
-  
+    //Déclaration de la direction assisté
+    float DA;
+    float DAmax = 40;
+    float DAmin = 10;
+
+    //Déclaration de la vitesse(gear)
+    int gear = 1;
+
+    //Boost de puissance selon la vitesse
+    int BoostGear;
+
+
 
 
 
@@ -71,11 +82,18 @@ public class car_control : MonoBehaviour
         //Changement du centre des masses de la voitures
         rb.centerOfMass = new Vector3(0f, 0.4f, 0.2f);
 
+        
+
     }
 
     // Update is called once per frame
     void FixedUpdate()
     {
+        //Calcule de la direction assisté
+        DirectionAssiste();
+
+        //reception de l'angle de la roue
+        angle = Input.GetAxis("Horizontal") * DA;
 
         //Pour que les roues avance(du collider au mesh) en fonctions de la vitesse
         rearR.transform.Rotate(RRW.rpm / 60 * 360 * Time.deltaTime, 0, 0);
@@ -89,9 +107,10 @@ public class car_control : MonoBehaviour
 
         //Calcule de la vitesse
         Speed = rb.velocity.magnitude * 3.6f;
+
         //Affichage de la vitesse à l'UI
         TxtSpeed.text = "Vitesse : " + (int)Speed;
-
+        Txtgear.text = "Rapport : " + gear;
 
 
         if (Input.GetKey("z") && Speed < MaxSpeed)
@@ -109,7 +128,6 @@ public class car_control : MonoBehaviour
 
 
         }
-
 
         if (Input.GetKey("s"))
         {
@@ -150,24 +168,11 @@ public class car_control : MonoBehaviour
             //RRW.sidewaysFriction = NonglisseRight;
             //RLW.sidewaysFriction = NonglisseLeft;
         }
-       
-        
-        if (Input.GetKey("d"))
-        {
-            tourneD();
- 
-        }
-        else if (Input.GetKey("q"))
-        {
-            tourneG();   
-        }
-        else
-        {
-            redressement();
-        }
+
+        tourne(Input.GetAxis("Horizontal") * DA);
 
         //Allume et éteint les feux avants
-        if(Input.GetKeyUp(KeyCode.L))
+        if (Input.GetKeyUp(KeyCode.L))
         {
             Debug.Log(phare);
             phare = !phare;
@@ -181,60 +186,36 @@ public class car_control : MonoBehaviour
                 FrontLight.SetActive(false);
             }         
         }
+
+
+        //Systeme de vitesse
+        BoiteDeVitesse(Speed, MaxSpeed);
         
 
-        son();
+
+
+
 
 
 
         //ZONE DE DEBUG
-        
+
         //Debug.Log("FR RPM : " + FRW.rpm + "FL RPM : " + FLW.rpm + "RR RPM : " + RRW.rpm + "RL RPM : " + RLW.rpm);
         //Debug.Log("angle : " + angle.ToString());
         //Debug.Log("FRW angle : " + frontR.localEulerAngles );
-
+        //Debug.Log("Axis : " + Input.GetAxis("Horizontal"));
+        Debug.Log(gear);
 
     }
 
 
-    void tourneD()
+    void tourne(float sAngle)
     {
-        timerR = 0;
-        timer += Time.deltaTime;
-
-        if (timer > waitTime) // a chaque 0.1s
-        {
-            if (angle < 45) // que si angle < 45
-            {
-                angle++;
-            }
-            FRW.steerAngle = angle;
-            FLW.steerAngle = angle;
-
-        }
+        FRW.steerAngle = sAngle;
+        FLW.steerAngle = sAngle;
     }
 
-
-    void tourneG()
-    {
-        timerR = 0;
-        timer += Time.deltaTime;
-
-        if (timer > waitTime) // a chaque 0.1s
-        {
-            if (angle > -45)
-            {         
-                angle--;
-            }
-            FRW.steerAngle = angle;
-            FLW.steerAngle = angle;
-
-        }
-            
-
-    }
-
-
+    /* redressement
     void redressement()
     {
         //initailisation du timer à 0
@@ -264,8 +245,7 @@ public class car_control : MonoBehaviour
 
         }
     }
-
-
+    */
     void freinage()
     {
         //Freinnage roue avant droite
@@ -328,8 +308,10 @@ public class car_control : MonoBehaviour
 
     void acceleration()
     {
-        RRW.motorTorque = Input.GetAxis("Vertical") * CoefAcceleration * CH;
-        RLW.motorTorque = Input.GetAxis("Vertical") * CoefAcceleration * CH; 
+        float puissance = Input.GetAxis("Vertical") * CoefAcceleration * CH + BoostGear;
+        RRW.motorTorque = puissance;
+        RLW.motorTorque = puissance;
+        
     }
 
     void recule()
@@ -339,17 +321,53 @@ public class car_control : MonoBehaviour
     }
 
 
-    void son()
+    void DirectionAssiste()
     {
-        enSound.pitch = Mathf.Clamp((Speed / MaxSpeed)*4f + 1f,1f,3f);
-        /*
-        var enVol = Mathf.Abs((RRW.rpm / 60 *360 * Time.deltaTime)/200);
-        var enPit = Mathf.Abs((RRW.rpm / 60 * 360 * Time.deltaTime)/30);
-
-        enSound.volume = Mathf.Clamp(enVol, 0.2f, 1);
-        enSound.pitch = Mathf.Clamp(enPit, 0.5f, 2.5f);
-        */
+        DA = -((DAmax - DAmin) / MaxSpeed) * Speed + DAmax;
     }
+
+
+    void BoiteDeVitesse(float vitesse , float maxVitesse)
+    {
+        if ((int)vitesse > 124)
+        {
+            gear = 5;
+            BoostGear = -100;
+            enSound.pitch = Mathf.Clamp((vitesse / maxVitesse) * 2f + 0.5f, 1f, 3f);
+
+
+        }
+        else if ((int)vitesse > 84)
+        {
+            gear = 4;
+            BoostGear = -50;
+            enSound.pitch = Mathf.Clamp((vitesse / maxVitesse) * 2.5f + 0.5f, 1f, 3f);
+        }
+        else if ((int)vitesse > 56)
+        {
+            gear = 3;
+            BoostGear = 0;
+            enSound.pitch = Mathf.Clamp((vitesse / maxVitesse) * 3f + 0.5f, 1f, 3f);
+        }
+        else if ((int)vitesse > 21)
+        {
+            gear = 2;
+            BoostGear = 50;
+            enSound.pitch = Mathf.Clamp((vitesse / maxVitesse) * 4f + 0.5f, 1f, 3f);
+        }
+        else
+        {
+            gear = 1;
+            BoostGear = 70;
+            enSound.pitch = Mathf.Clamp((vitesse / maxVitesse) * 5f + 1f, 1f, 3f);
+
+
+        }
+    }
+
+
+    
+
 
 }
 
